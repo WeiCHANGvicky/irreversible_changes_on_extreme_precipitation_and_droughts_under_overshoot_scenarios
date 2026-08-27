@@ -1,0 +1,45 @@
+
+
+import xarray as xr
+import numpy as np
+
+import glob
+import warnings
+warnings.filterwarnings("ignore")
+
+data_path=r'E:\data\pr\historical\MPI-ESM-LR'
+
+files= sorted(glob.glob(f"{data_path}\*.nc"))
+
+ds=xr.open_mfdataset(files, combine="by_coords", use_cftime=True)
+pr=ds["pr"]
+
+
+pr = pr * 86400
+
+
+pr.attrs["units"] = "mm/day"  
+
+baseline = pr.sel(time=slice("1986-01-01", "2005-12-31"))
+
+
+wet_mask = baseline >= 1.0
+baseline_wet = baseline.where(wet_mask)
+
+
+r95p_threshold = baseline_wet.quantile(0.95, dim="time", skipna=True)
+r99p_threshold = baseline_wet.quantile(0.99, dim="time", skipna=True)
+
+
+r95p_threshold.name = "R95p_threshold"
+r99p_threshold.name = "R99p_threshold"
+
+r95p_threshold.attrs["units"] = "mm/day"
+r99p_threshold.attrs["units"] = "mm/day"
+
+r95p_threshold.to_netcdf(r"E:\threshold\MPI-ESM-LR\R95p.nc")
+
+
+r99p_threshold.to_netcdf(r"E:\threshold\MPI-ESM-LR\R99p.nc")
+
+print("done")
