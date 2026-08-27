@@ -1,0 +1,90 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Oct 13 01:58:49 2025
+
+@author: WeiCH
+"""
+
+import xarray as xr
+import numpy as np
+import warnings
+warnings.filterwarnings("ignore")
+
+
+
+data_file =  r""
+
+r95_file = r""
+
+r99_file = r""
+out_file = r""
+
+
+ds = xr.open_dataset(data_file, chunks={"time": 365})
+pr = ds["pr"]
+
+
+
+def read_threshold(file, varname):
+    ds = xr.open_dataset(file).drop_vars("quantile", errors="ignore")
+    da = ds[varname].squeeze(drop=True)
+    return da
+
+
+r95p = read_threshold(r95_file, "R95p_threshold")
+r99p = read_threshold(r99_file, "R99p_threshold")
+
+
+
+pr_sub = pr.sel(time=slice("2006-01-01", "2300-12-31"))
+years = np.arange(2006, 2301)
+
+
+
+def compute_indices(pr_y, r95p, r99p):
+    
+rx1day = pr_y.max(dim="time")
+    rx5day = pr_y.rolling(time=5, center=False).sum().max(dim="time")
+
+    r95_mask = pr_y >= r95p
+    r99_mask = pr_y >= r99p
+
+    r95_tot = pr_y.where(r95_mask, 0).sum(dim="time")
+    r99_tot = pr_y.where(r99_mask, 0).sum(dim="time")
+
+    r95_days = r95_mask.sum(dim="time")
+    r99_days = r99_mask.sum(dim="time")
+
+    return xr.Dataset({
+        "Rx1day": rx1day,
+        "Rx5day": rx5day,
+        "R95pTOT": r95_tot,
+        "R99pTOT": r99_tot,
+        "R95p_days": r95_days,
+        "R99p_days": r99_days
+    })
+
+
+print("⚙️ 开始逐年计算 ...")
+all_results = []  
+
+
+for i, y in enumerate(years):
+    pr_y = pr_sub.sel(time=str(y))
+    ds_y = compute_indices(pr_y, r95p, r99p)
+    
+
+    ds_y = ds_y.assign_coords(year=[y])
+    
+
+    all_results.append(ds_y)
+
+
+
+
+final_ds = xr.concat(all_results, dim="year")
+
+
+final_ds.to_netcdf(out_file)
+
+
