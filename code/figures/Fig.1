@@ -1,0 +1,247 @@
+import glob
+import os
+import warnings
+import matplotlib.pyplot as plt
+import numpy as np
+import xarray as xr
+
+warnings.filterwarnings('ignore')
+
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['ps.fonttype'] = 42
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica']
+
+area_file = r'E:\fx\areacella\areacella_fx_ACCESS-ESM1-5.nc'
+area = xr.open_dataset(area_file)['areacella']
+
+
+def weighted(data, weights):
+  num = (data * weights).sum(dim=('lat', 'lon'))
+  den = weights.sum(dim=('lat', 'lon'))
+  return num / den
+
+
+def process_gmst(file_pattern):
+  files = sorted(glob.glob(file_pattern))
+  gmst_list = []
+  for file in files:
+    ds = xr.open_dataset(file)
+    tas = ds['tas'] - 273.15
+    temp = weighted(tas, area)
+    gmst = temp - temp.sel(time=slice('1850', '1900')).mean('time')
+    gmst_list.append(gmst)
+
+  le_gmst = xr.concat(gmst_list, dim='member')
+  lem_gmst = le_gmst.mean('member')
+  smoothed_gmst = lem_gmst.rolling(time=21, center=True).mean('time')
+  return le_gmst, smoothed_gmst
+
+
+
+path_ssp126 = r'E:\data\tas\annual\ssp126\*.nc'
+path_ssp534 = r'E:\data\tas\annual\ssp534\*.nc'
+
+le_gmst_126, smoothed_gmst_126 = process_gmst(path_ssp126)
+
+le_gmst_534, smoothed_gmst_534 = process_gmst(path_ssp534)
+print(le_gmst_126.sel(time='2075').mean('member').values)
+
+print(le_gmst_534.sel(time='2065').mean('member').values)
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6.9, 2.6), dpi=800)
+
+scenarios = [
+    {
+        'ax': ax1,
+        'panel_label': '(a)', 
+        
+        'title': 'SSP1-2.6',
+        'le_gmst': le_gmst_126,
+        'smoothed_gmst': smoothed_gmst_126,
+        'target_temp': 1.83,
+        'target_text': '1.83 K',
+        'p1_span': (2035, 2055),
+        'p2_span': (2065, 2085),
+        'p2_peak_year': 2075,
+        'p3_span': (2170, 2190),
+        'p4_span': (2280, 2300),
+    },
+    {
+        'ax': ax2,
+        'panel_label': '(b)',  
+        
+        'title': 'SSP5-3.4',
+        'le_gmst': le_gmst_534,
+        'smoothed_gmst': smoothed_gmst_534,
+        'target_temp': 1.866,
+        'target_text': '1.866 K',
+        'p1_span': (2025, 2045),
+        'p2_span': (2055, 2075),
+        'p2_peak_year': 2065,
+        'p3_span': (2165, 2185),
+        'p4_span': (2280, 2300),
+    },
+]
+
+for sc in scenarios:
+  ax = sc['ax']
+  le_gmst = sc['le_gmst']
+  smoothed_gmst = sc['smoothed_gmst']
+  
+
+  p1_span = sc['p1_span']
+  p2_span = sc['p2_span']
+  p3_span = sc['p3_span']
+  p4_span = sc['p4_span']
+
+  # --- A. 坐标轴与刻度 ---
+  ax.set_xlim(1980, 2300)
+  ax.set_ylim(-0.5, 3.5)
+  ax.set_yticks([0, 1, 2, 3])
+  ax.set_xlabel('Year', fontsize=10, labelpad=3)
+  ax.set_ylabel('GMST (K)', fontsize=10, labelpad=3)
+ 
+  ax.tick_params(axis='both', labelsize=8, length=3, width=0.6)
+
+  
+  ax.set_title(
+      f"{sc['panel_label']}",
+      fontsize=10,
+      fontweight='bold',
+      loc='left',
+      pad=8,
+  )
+
+  
+  ax.set_title(sc['title'], fontsize=10, loc='right', pad=8)
+
+
+    for spine in ax.spines.values():
+    spine.set_linewidth(0.6)
+
+
+  # P1
+  ax.axvspan(
+      p1_span[0],
+      p1_span[1],
+      color='lightgrey',
+      alpha=0.6,
+      linewidth=0,
+      zorder=1,
+  )
+  ax.text(
+      (p1_span[0] + p1_span[1]) / 2,
+      3,
+      'P1',
+      fontsize=10,
+      ha='center',
+      va='bottom',
+  )
+
+  # P2
+  ax.axvspan(
+      p2_span[0],
+      p2_span[1],
+      color='lightgrey',
+      alpha=0.6,
+      linewidth=0,
+      zorder=1,
+  )
+  #ax.axvline(
+   #   sc['p2_peak_year'],
+   #   linestyle='--',
+    #  color='gray',
+   #   linewidth=1.0,
+   #   zorder=2,
+  #)
+  ax.text(
+      (p2_span[0] + p2_span[1]) / 2,
+      3,
+      'P2',
+      fontsize=10,
+      ha='center',
+      va='bottom',
+  )
+
+  # P3
+  ax.axvspan(
+      p3_span[0],
+      p3_span[1],
+      color='lightgrey',
+      alpha=0.6,
+      linewidth=0,
+      zorder=1,
+  )
+  ax.text(
+      (p3_span[0] + p3_span[1]) / 2,
+      3,
+      'P3',
+      fontsize=10,
+      ha='center',
+      va='bottom',
+  )
+
+  # P4
+  ax.axvspan(
+      p4_span[0],
+      p4_span[1],
+      color='lightgrey',
+      alpha=0.6,
+      linewidth=0,
+      zorder=1,
+  )
+  ax.text(
+      (p4_span[0] + p4_span[1]) / 2,
+      3,
+      'P4',
+      fontsize=10,
+      ha='center',
+      va='bottom',
+  )
+
+
+  ax.axhline(
+      sc['target_temp'],
+      linestyle='--',
+      color='salmon',
+      linewidth=1.0,
+      zorder=2,
+  )
+  ax.text(
+      2220,
+      sc['target_temp'] - 0.5,
+      sc['target_text'],
+      color='salmon',
+      fontsize=10,
+      va='center',
+  )
+
+
+  for i in range(le_gmst.sizes['member']):
+    member_data = le_gmst.isel(member=i)
+    member_smooth = member_data.rolling(time=21, center=True).mean('time')
+    ax.plot(
+        member_smooth['time.year'],
+        member_smooth,
+        color='salmon',
+        alpha=0.25,
+        linewidth=0.4,
+        zorder=3,
+    )
+
+  ax.plot(
+      smoothed_gmst['time.year'],
+      smoothed_gmst,
+      color='orangered',
+      linewidth=1.5,
+      zorder=4,
+  )
+
+
+plt.subplots_adjust(wspace=0.18, left=0.08, right=0.98, top=0.88, bottom=0.18)
+
+
+plt.savefig('Figure01.pdf', dpi=800, bbox_inches='tight')
+plt.savefig('Figure01.png', dpi=800, bbox_inches='tight')
+plt.show()
